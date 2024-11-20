@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Update package index
+sudo apt-get update
+
+# Install required dependencies
+sudo apt-get install -y apt-transport-https ca-certificates curl
+
+# Install Docker
+sudo apt-get install -y docker.io
+
+# Enable Docker to start on boot
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Install cri-dockerd to use Docker as the container runtime for Kubernetes
+git clone https://github.com/Mirantis/cri-dockerd.git
+cd cri-dockerd
+make
+sudo cp cri-dockerd /usr/local/bin/
+sudo cp contrib/systemd/cri-docker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable cri-docker
+sudo systemctl start cri-docker
+
+# Disable swap (required by Kubernetes)
+sudo swapoff -a
+sudo sed -i '/ swap / s/^/#/' /etc/fstab
+
+# Add Kubernetes APT repository and key
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# Install Kubernetes components
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+
+# Hold Kubernetes packages at current version
+sudo apt-mark hold kubelet kubeadm kubectl
+
+# Initialize Kubernetes master (on master node only)
+if [ "$(hostname)" == "master" ]; then
+    sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+
+    # Set up kubeconfig for the current user
+    mkdir -p $HOME/.kube
+    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+    sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+    # Install Flannel network plugin
+    kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+    echo "Master node initialized. Please run the following command on the worker nodes to join the cluster:"
+    kubeadm token create --print-join-command
+fi
+
+# Join worker nodes (run this on each worker node, using the join command provided by the master)
+# Example: kubeadm join <MASTER-IP>:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+
+# Enable and restart services
+sudo systemctl restart kubelet
+sudo systemctl enable kubelet
+
+# Verify cluster status (on the master node)
+if [ "$(hostname)" == "master" ]; then
+    kubectl get nodes
+    kubectl get pods --all-namespaces
+fi
+
+echo "Kubernetes setup completed!"
