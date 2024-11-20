@@ -1,0 +1,10 @@
+Configure container runtimes
+sudo nano /etc/default/kubelet
+KUBELET_EXTRA_ARGS="--container-runtime=docker"
+
+
+# Edit the kubelet configuration file to specify containerd
+sudo nano /etc/default/kubelet
+KUBELET_EXTRA_ARGS="--container-runtime=remote --container-runtime-endpoint=/var/run/containerd/containerd.sock"
+# Restart kubelet to pick up changes
+sudo systemctl restart kubelet
