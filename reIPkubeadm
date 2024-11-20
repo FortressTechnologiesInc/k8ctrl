@@ -27,3 +27,40 @@ kubectl delete node node-name
 
 on the woker nodes 
 kubeadm reset
+
+
+----------------------------------------------------------------------------------------------------------------
+https://devopstales.github.io/kubernetes/k8s-change-ip/
+----------------------------------------------------------------------------------------------------------------
+Backup the data on the master
+systemctl stop kubelet docker
+mv /etc/kubernetes /etc/kubernetes-backup
+mv /var/lib/kubelet /var/lib/kubelet-backup
+
+Preper for the new Cluster
+mkdir /etc/kubernetes
+cp -r /etc/kubernetes-backup/pki /etc/kubernetes
+rm -f /etc/kubernetes/pki/{apiserver.*,etcd/peer.*}
+rm -f ~/.kube/config
+------------------------------------------------------------
+systemctl start docker
+
+echo 'KUBELET_EXTRA_ARGS="--node-ip=172.17.8.101"' > /etc/sysconfig/kubelet
+
+# add --kubernetes-version, --pod-network-cidr and --token options if needed
+kubeadm init --control-plane-endpoint "172.17.8.100:16443" --apiserver-advertise-address "172.17.8.101" \
+--ignore-preflight-errors=DirAvailable--var-lib-etcd
+
+cp kubernetes/admin.conf ~/.kube/config
+
+# Verify resutl
+kubectl cluster-info
+
+# wait for some time and delete old node
+sleep 120
+kubectl get nodes --sort-by=.metadata.creationTimestamp
+kubectl delete node $(kubectl get nodes -o jsonpath='{.items[?(@.status.conditions[0].status=="Unknown")].metadata.name}')
+
+kubeadm reset
+echo 'KUBELET_EXTRA_ARGS="--node-ip=172.17.8.102"' > /etc/sysconfig/kubelet
+kubeadm token create --print-join-command
