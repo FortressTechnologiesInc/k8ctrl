@@ -1,3 +1,5 @@
+https://bizanosa.com/install-kubernetes-with-kubeadm/#edit-hosts-file
+
 turn off swap by running: sudo swapoff -a ; sudo sed -i '/ swap / s/^/#/' /etc/fstab
 vim /etc/fstab
 
