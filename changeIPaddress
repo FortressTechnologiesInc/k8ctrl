@@ -22,5 +22,13 @@ IP=$(curl -s ifconfig.me)
 kubeadm init --control-plane-endpoint $IP \
 --ignore-preflight-errors=DirAvailable--var-lib-etcd
 
+
+sudo kubeadm init --control-plane-endpoint 192.168.1.22 \
+--pod-network-cidr=10.244.0.0/16 \
+--apiserver-advertise-address=192.168.1.22 \
+--ignore-preflight-errors=DirAvailable--var-lib-etcd
+
+
+
 # Verify resutl
 # kubectl cluster-info
