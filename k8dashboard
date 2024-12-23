@@ -1,16 +1,4 @@
-# Copyright 2017 The Kubernetes Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Kubernetes Dashboard Deployment
 
 apiVersion: v1
 kind: Namespace
@@ -28,21 +16,22 @@ metadata:
   namespace: kubernetes-dashboard
 
 ---
-# This section modified
-kind: Service
+
 apiVersion: v1
+kind: Service
 metadata:
   labels:
     k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 spec:
-  type: LoadBalancer    #NodePort
+  type: LoadBalancer  # Change to NodePort if you want it accessible on node IP
   ports:
     - port: 443
       targetPort: 8443
   selector:
     k8s-app: kubernetes-dashboard
+
 ---
 
 apiVersion: v1
@@ -80,8 +69,8 @@ type: Opaque
 
 ---
 
-kind: ConfigMap
 apiVersion: v1
+kind: ConfigMap
 metadata:
   labels:
     k8s-app: kubernetes-dashboard
@@ -90,25 +79,22 @@ metadata:
 
 ---
 
-kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
 metadata:
   labels:
     k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
   namespace: kubernetes-dashboard
 rules:
-  # Allow Dashboard to get, update and delete Dashboard exclusive secrets.
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: ["kubernetes-dashboard-key-holder", "kubernetes-dashboard-certs", "kubernetes-dashboard-csrf"]
     verbs: ["get", "update", "delete"]
-    # Allow Dashboard to get and update 'kubernetes-dashboard-settings' config map.
   - apiGroups: [""]
     resources: ["configmaps"]
     resourceNames: ["kubernetes-dashboard-settings"]
     verbs: ["get", "update"]
-    # Allow Dashboard to get metrics.
   - apiGroups: [""]
     resources: ["services"]
     resourceNames: ["heapster", "dashboard-metrics-scraper"]
@@ -120,14 +106,13 @@ rules:
 
 ---
 
-kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
 metadata:
   labels:
     k8s-app: kubernetes-dashboard
   name: kubernetes-dashboard
 rules:
-  # Allow Metrics Scraper to get metrics from the Metrics server
   - apiGroups: ["metrics.k8s.io"]
     resources: ["pods", "nodes"]
     verbs: ["get", "list", "watch"]
@@ -167,8 +152,8 @@ subjects:
 
 ---
 
-kind: Deployment
 apiVersion: apps/v1
+kind: Deployment
 metadata:
   labels:
     k8s-app: kubernetes-dashboard
@@ -195,14 +180,9 @@ spec:
           args:
             - --auto-generate-certificates
             - --namespace=kubernetes-dashboard
-            # Uncomment the following line to manually specify Kubernetes API server Host
-            # If not specified, Dashboard will attempt to auto discover the API server and connect
-            # to it. Uncomment only if the default does not work.
-            # - --apiserver-host=http://my-address:port
           volumeMounts:
             - name: kubernetes-dashboard-certs
               mountPath: /certs
-              # Create on-disk volume to store exec logs
             - mountPath: /tmp
               name: tmp-volume
           livenessProbe:
@@ -226,15 +206,14 @@ spec:
       serviceAccountName: kubernetes-dashboard
       nodeSelector:
         "kubernetes.io/os": linux
-      # Comment the following tolerations if Dashboard must not be deployed on master
       tolerations:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
 
 ---
 
-kind: Service
 apiVersion: v1
+kind: Service
 metadata:
   labels:
     k8s-app: dashboard-metrics-scraper
@@ -246,11 +225,11 @@ spec:
       targetPort: 8000
   selector:
     k8s-app: dashboard-metrics-scraper
-  
+
 ---
 
-kind: Deployment
 apiVersion: apps/v1
+kind: Deployment
 metadata:
   labels:
     k8s-app: dashboard-metrics-scraper
@@ -283,8 +262,8 @@ spec:
             initialDelaySeconds: 30
             timeoutSeconds: 30
           volumeMounts:
-          - mountPath: /tmp
-            name: tmp-volume
+            - mountPath: /tmp
+              name: tmp-volume
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -293,15 +272,23 @@ spec:
       serviceAccountName: kubernetes-dashboard
       nodeSelector:
         "kubernetes.io/os": linux
-      # Comment the following tolerations if Dashboard must not be deployed on master
       tolerations:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
       volumes:
         - name: tmp-volume
           emptyDir: {}
+
 ---
-# IRSOLS Inc 2019-2020
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: admin-user
+  namespace: kubernetes-dashboard
+
+---
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -311,26 +298,21 @@ roleRef:
   kind: ClusterRole
   name: cluster-admin
 subjects:
-- kind: ServiceAccount
-  name: admin-user
-  namespace: kubernetes-dashboard
----
-# IRSOLS Inc 2019-2021
-
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: admin-user
-  namespace: kubernetes-dashboard
+  - kind: ServiceAccount
+    name: admin-user
+    namespace: kubernetes-dashboard
 
 ---
+
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: heapster
   namespace: kube-system
+
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: heapster-rolebinding
@@ -339,10 +321,12 @@ roleRef:
   kind: ClusterRole
   name: cluster-admin
 subjects:
-- kind: ServiceAccount
-  name: heapster
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: heapster
+    namespace: kube-system
+
 ---
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -369,14 +353,14 @@ spec:
         - /heapster
         - --source=kubernetes:https://kubernetes.default?useServiceAccount=true&kubeletHttps=true&kubeletPort=10250&insecure=true
         - --sink=influxdb:http://monitoring-influxdb.kube-system.svc:8086
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     task: monitoring
-    # For use as a Cluster add-on (https://github.com/kubernetes/kubernetes/tree/master/cluster/addons)
-    # If you are NOT using this as an addon, you should comment out this line.
     kubernetes.io/cluster-service: 'true'
     kubernetes.io/name: Heapster
   name: heapster
@@ -388,7 +372,9 @@ spec:
   selector:
     k8s-app: heapster
 
----apiVersion: apps/v1
+---
+
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: monitoring-influxdb
@@ -417,14 +403,14 @@ spec:
       volumes:
       - name: influxdb-storage
         emptyDir: {}
+
 ---
+
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     task: monitoring
-    # For use as a Cluster add-on (https://github.com/kubernetes/kubernetes/tree/master/cluster/addons)
-    # If you are NOT using this as an addon, you should comment out this line.
     kubernetes.io/cluster-service: 'true'
     kubernetes.io/name: monitoring-influxdb
   name: monitoring-influxdb
@@ -435,25 +421,4 @@ spec:
     targetPort: 8086
   selector:
     k8s-app: influxdb
-
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: dashboard-admin
-  namespace: kube-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: cluster-admin-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: dashboard-admin
-  namespace: kube-system
-
 
