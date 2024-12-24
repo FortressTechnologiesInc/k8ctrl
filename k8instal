@@ -4,55 +4,53 @@ https://github.com/tunetolinux/Kubernetes-Installation.wiki.git
 
 #!/bin/bash
 
-# Set hostname and update /etc/hosts for local name resolution
+# Step 1: Set Hostname and Update /etc/hosts for Local Name Resolution
 echo "Setting hostname to kube-master"
 sudo hostnamectl set-hostname kube-master
-echo "127.0.0.1 kube-master" | sudo tee -a /etc/hosts
 
-# Disable swap
+echo "Updating /etc/hosts for local name resolution"
+# Open /etc/hosts and add the line for local resolution (edit as needed)
+echo "127.0.1.1 kube-master" | sudo tee -a /etc/hosts
+
+# Step 2: Disable Swap
 echo "Disabling swap"
 sudo swapoff -a
-# Comment out swap entries in /etc/fstab
-sudo sed -i '/ swap / s/^/#/' /etc/fstab
+sudo sed -i '/swap/d' /etc/fstab  # Remove any swap entries
 
-# Add firewall rules for Kubernetes service endpoints & kubelet
-echo "Allowing firewall rules for Kubernetes and Kubelet"
-sudo ufw allow 6443/tcp
-sudo ufw allow 10250/tcp
+# Step 3: Add Firewall Rules for Kubernetes Service Endpoint & Kubelet
+echo "Adding firewall rules for Kubernetes services"
+sudo ufw allow 6443/tcp  # Kubernetes API Server
+sudo ufw allow 10250/tcp  # Kubelet
 sudo ufw enable
 
-# Let iptables see bridged traffic
-echo "Configuring iptables to see bridged traffic"
+# Step 4: Letting iptables See Bridged Traffic
+echo "Configuring iptables for bridged traffic"
 echo -e "net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1" | sudo tee /etc/sysctl.d/k8s.conf
 sudo sysctl --system
 
-# Add Kubernetes repository
-echo "Adding Kubernetes repository"
-sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl
-curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+# Step 5: Add Kubernetes Repository
+echo "Adding Kubernetes apt repository"
 echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-
-# Set SELinux to permissive mode (SELinux is not enabled by default in Ubuntu)
-echo "Disabling AppArmor (SELinux is not enabled by default)"
-sudo service apparmor stop
-sudo systemctl disable apparmor
-
-# Install utilities
-echo "Installing necessary utilities"
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 sudo apt update
-sudo apt install -y apt-utils lvm2
 
-# Add Docker repository and install Docker
-echo "Installing Docker"
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-archive-keyring.gpg
-echo "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+# Step 6: Install Package Utilities
+echo "Installing package utilities"
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+
+# Step 7: Add Docker Repository and Install Docker
+echo "Adding Docker repository and installing Docker"
+# Add Docker's official GPG key
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+# Add Docker's repository
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 
 # Install Docker
 sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io
+sudo apt install -y containerd.io docker-ce docker-ce-cli
 
-# Create overlay2 Docker configuration file
-echo "Configuring Docker with overlay2 storage driver"
+# Configure Docker to use overlay2 as storage driver
+echo "Configuring Docker to use overlay2 storage driver"
 sudo mkdir -p /etc/docker
 echo '{
   "exec-opts": ["native.cgroupdriver=systemd"],
@@ -63,21 +61,40 @@ echo '{
 }' | sudo tee /etc/docker/daemon.json
 
 # Add Docker to systemd
-echo "Enabling Docker to start on boot"
+echo "Enabling Docker service"
+sudo mkdir -p /etc/systemd/system/docker.service.d
 sudo systemctl daemon-reload
 sudo systemctl restart docker
 sudo systemctl enable docker
 
-# Install kubeadm, kubelet, kubectl
-echo "Installing Kubernetes components"
+# Step 8: Install Kubeadm, Kubelet, and Kubectl
+echo "Installing Kubeadm, Kubelet, and Kubectl"
 sudo apt update
 sudo apt install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl  # Prevent automatic updates
 
-# Prevent Kubernetes packages from being upgraded unintentionally
-sudo apt-mark hold kubelet kubeadm kubectl
-
-# Enable and start kubelet
-echo "Starting kubelet"
+# Enable kubelet to start on boot
 sudo systemctl enable --now kubelet
 
-echo "Kubernetes and Docker installation completed successfully!"
+# Step 9: Initialize Kubernetes Cluster
+echo "Initializing Kubernetes Cluster"
+sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address=192.168.99.112
+
+# Set up kubeconfig for kubectl command
+echo "Setting up kubeconfig for kubectl"
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Apply the Weave network plugin (you can replace this with your preferred network plugin)
+echo "Applying Weave network plugin"
+kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+
+# Step 10: Install Bash Completion for kubectl
+echo "Installing bash completion for kubectl"
+sudo apt install -y bash-completion
+echo "source <(kubectl completion bash)" >> ~/.bashrc
+source ~/.bashrc
+
+# Final Message
+echo "Kubernetes cluster setup is complete!"
