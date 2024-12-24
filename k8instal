@@ -1,0 +1,82 @@
+https://github.com/tunetolinux/Kubernetes-Installation/wiki
+
+
+#!/bin/bash
+
+# Set hostname and update /etc/hosts for local name resolution
+echo "Setting hostname to kube-master"
+sudo hostnamectl set-hostname kube-master
+echo "127.0.0.1 kube-master" | sudo tee -a /etc/hosts
+
+# Disable swap
+echo "Disabling swap"
+sudo swapoff -a
+# Comment out swap entries in /etc/fstab
+sudo sed -i '/ swap / s/^/#/' /etc/fstab
+
+# Add firewall rules for Kubernetes service endpoints & kubelet
+echo "Allowing firewall rules for Kubernetes and Kubelet"
+sudo ufw allow 6443/tcp
+sudo ufw allow 10250/tcp
+sudo ufw enable
+
+# Let iptables see bridged traffic
+echo "Configuring iptables to see bridged traffic"
+echo -e "net.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1" | sudo tee /etc/sysctl.d/k8s.conf
+sudo sysctl --system
+
+# Add Kubernetes repository
+echo "Adding Kubernetes repository"
+sudo apt update && sudo apt install -y apt-transport-https ca-certificates curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# Set SELinux to permissive mode (SELinux is not enabled by default in Ubuntu)
+echo "Disabling AppArmor (SELinux is not enabled by default)"
+sudo service apparmor stop
+sudo systemctl disable apparmor
+
+# Install utilities
+echo "Installing necessary utilities"
+sudo apt update
+sudo apt install -y apt-utils lvm2
+
+# Add Docker repository and install Docker
+echo "Installing Docker"
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-archive-keyring.gpg
+echo "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list
+
+# Install Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io
+
+# Create overlay2 Docker configuration file
+echo "Configuring Docker with overlay2 storage driver"
+sudo mkdir -p /etc/docker
+echo '{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": { "max-size": "100m" },
+  "storage-driver": "overlay2",
+  "storage-opts": ["overlay2.override_kernel_check=true"]
+}' | sudo tee /etc/docker/daemon.json
+
+# Add Docker to systemd
+echo "Enabling Docker to start on boot"
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+sudo systemctl enable docker
+
+# Install kubeadm, kubelet, kubectl
+echo "Installing Kubernetes components"
+sudo apt update
+sudo apt install -y kubelet kubeadm kubectl
+
+# Prevent Kubernetes packages from being upgraded unintentionally
+sudo apt-mark hold kubelet kubeadm kubectl
+
+# Enable and start kubelet
+echo "Starting kubelet"
+sudo systemctl enable --now kubelet
+
+echo "Kubernetes and Docker installation completed successfully!"
