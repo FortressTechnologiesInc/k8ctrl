@@ -11,7 +11,7 @@ spec:
   # Production services will go here. Public IPs are expensive, so we leased
   # just 4 of them.
   addresses:
-  - 192.168.1.50-192.168.1.70
+  - 192.168.1.55-192.168.1.75
   autoAssign: true
 
 #l2advertisement.yaml
