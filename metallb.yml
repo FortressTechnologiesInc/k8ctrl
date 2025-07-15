@@ -24,6 +24,8 @@ metadata:
 spec:
   ipAddressPools:
   - production
+  - ingress-nginx
+  - kubernetes-dashboard
   interfaces:
   - enp0s3
 
