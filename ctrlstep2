@@ -68,3 +68,5 @@ crictl config \
 
 ---------------------------------------------------------------------------------------
 kubeadm init --apiserver-advertise-address <controlplane ip> --pod-network-cidr=10.244.0.0/16 --cri-socket unix:///run/containerd/containerd.sock
+kubectl apply -f https://reweave.azurewebsites.net/k8s/v1.29/net.yaml
+**Replace v1.29 with the version on Kubernetes on your cluster.
