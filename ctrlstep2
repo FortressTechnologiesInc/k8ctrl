@@ -43,6 +43,7 @@ containerd config default > /etc/containerd/config.toml
 Edit the configuration to set up CGroups 
 Scroll down till you find a line with SystemdCgroup = false. Edit it to be SystemdCgroup = true, then save and exit vi
 vi /etc/containerd/config.toml
+sandbox_image = "registry.k8s.io/pause:3.10"
 Restart contained
 systemctl restart containerd
 
