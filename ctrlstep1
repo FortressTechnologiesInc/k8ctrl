@@ -73,6 +73,7 @@ sudo mkdir /etc/containerd && sudo touch /etc/containerd/config.toml && sudo con
 exit
 Edit this containerd service configuration file /etc/containerd/config.toml, ( sudo vi /etc/containerd/config.toml)
 SystemdCgroup =true
+sandbox_image = "registry.k8s.io/pause:3.10"
 
 Save /etc/containerd/config.toml
 Apply the changes by restarting containerd
